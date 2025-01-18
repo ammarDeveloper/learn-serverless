@@ -1,0 +1,18 @@
+service: serverless-simple-http-endpoint
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+
+functions:
+  currentTime:
+    handler: handler.endpoint
+    events:
+      - http:
+          path: /time
+          method: GET
+
+plugins:
+  - serverless-offline
