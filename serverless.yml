@@ -1,18 +1,41 @@
-service: serverless-simple-http-endpoint
+service: serverless-project-v1
 
-provider:
+provider: 
   name: aws
   runtime: nodejs20.x
-  region: ap-south-1
   stage: ${opt:stage, 'dev'}
-
-functions:
-  currentTime:
-    handler: handler.endpoint
-    events:
-      - http:
-          path: /time
-          method: GET
+  region: 'ap-south-1'
+  memorySize: 128
+  timeout: 10
+  environment: 
+    TEST_VAR: TEST_VAR_VALUE-${self:provider.stage}
+    DB_USERNAME_PS: ${ssm:/db_username_ps}
+    DB_PASSWORD_PS: ${ssm:/db_password_ps}
+    DB_USERNAME_SM: ${self:custom.DB_ADMIN_SM}
+    DB_PASSWORD_SM: ${self:custom.DB_ADMIN_SM}
+    DB_USERNAME_FILE: ${file(./config/config.${opt:stage, 'dev'}.json):username}
+    DB_PASSWORD_FILE: ${file(./config/config.${opt:stage, 'dev'}.json):password}
+    SLS_VARIABLE: ${sls:instanceId}
+    AWS_VARIABLE: ${aws:accountId}
+    S3_VARIABLE: ${s3:slsvariables-1/variables_from_s3.txt}
+    CF_SERVICE_ENDPOINT: ${cf:serverless-project-v1-prod.ServiceEndpoint}
+    STR_TO_BOOL: ${strToBool(${ssm:/ENABLE_DEBUG})}
 
 plugins:
   - serverless-offline
+
+custom:
+  DB_ADMIN_SM: ${ssm:/aws/reference/secretsmanager/db_admin_sm_1}
+
+functions: 
+  user: 
+    handler: functions/user/user.post
+    description: 'Creates a new user'
+    environment: 
+      TEST_VAR_FS: 'TEST_VARIABLE_FS'
+      ENV_VAR_USING_PLUGIN: ${env:SOME_VALUE}-${self:provider.name}
+    events: 
+      - http:
+          path: user
+          method: post
+          cors: true
