@@ -1,18 +1,133 @@
-service: serverless-simple-http-endpoint
+service: serverless-project-v1
 
-provider:
+provider: 
   name: aws
   runtime: nodejs20.x
-  region: ap-south-1
   stage: ${opt:stage, 'dev'}
-
-functions:
-  currentTime:
-    handler: handler.endpoint
-    events:
-      - http:
-          path: /time
-          method: GET
+  region: 'ap-south-1'
+  memorySize: 128
+  timeout: 10
+  environment:
+    USERS_TABLE: ${self:custom.usersTableName}
 
 plugins:
   - serverless-offline
+  - serverless-dotenv-plugin
+
+custom:
+  usersTableName: usersTable-${opt:stage, self:provider.stage}
+
+functions: 
+  user: 
+    handler: functions/user/user.createUser
+    description: 'Creates a new user'
+    events: 
+      - http:
+          path: user
+          method: post
+          cors: true
+    role: customRole
+  getUser: 
+    handler: functions/user/user.getUser
+    description: 'Get user by email id'
+    events: 
+      - http:
+          path: user/{email}
+          method: get
+          cors: true
+    role: customRole
+  getUsersByCountryAndCreatedAt:
+    handler: functions/user/user.getUsers
+    description: 'Get users by country and createdAt'
+    events: 
+      - http:
+          path: users
+          method: get
+          cors: true
+    role: customRole
+  getUsersByCountryAndCreatedAtScan:
+    handler: functions/user/user.getUsersScan
+    description: 'Get users by country and createdAt using scan'
+    events: 
+      - http:
+          path: users-scan
+          method: get
+          cors: true
+    role: customRole
+
+resources:
+  Resources:
+    UsersTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: ${self:custom.usersTableName}
+        AttributeDefinitions: 
+          - AttributeName: email
+            AttributeType: S
+          - AttributeName: country
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        GlobalSecondaryIndexes:
+          - IndexName: createdAtIndex
+            KeySchema:
+              - AttributeName: country
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    customRole:
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        RoleName: MyCustRole-${opt:stage, self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement: 
+            - Effect: Allow
+              Principal: 
+                Service: 
+                - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: customRole-${opt:stage, self:provider.stage}
+            PolicyDocument: 
+              Version: '2012-10-17'
+              Statement: 
+                - Effect: Allow
+                  Action: 
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource:
+                    - !Join 
+                      - ':'
+                      - 
+                        - 'arn:aws:logs'
+                        - !Ref 'AWS::Region'
+                        - !Ref 'AWS::AccountId'
+                        - 'log-group:/aws/lambda/*:*:*'   
+                - Effect: Allow
+                  Action: 
+                    - "dynamodb:*"
+                  Resource: 
+                    - !Join
+                      - ':'
+                      - 
+                        - 'arn:aws:dynamodb'
+                        - !Ref 'AWS::Region'
+                        - !Ref 'AWS::AccountId'
+                        - 'table/${self:custom.usersTableName}'
+                    - !Join
+                      - ':'
+                      - 
+                        - 'arn:aws:dynamodb'
+                        - !Ref 'AWS::Region'
+                        - !Ref 'AWS::AccountId'
+                        - 'table/${self:custom.usersTableName}/index/createdAtIndex'
